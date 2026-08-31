@@ -473,11 +473,14 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block space-y-1">
-      <span className="label-caps">{label}</span>
+      <span className="label-caps block truncate" title={label}>
+        {label}
+      </span>
       {children}
     </label>
   );
 }
+
 
 function Num({
   label,
