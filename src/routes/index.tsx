@@ -55,9 +55,12 @@ function Workstation() {
   const [sheetIndex, setSheetIndex] = useState(0);
   const [side, setSide] = useState<"front" | "back">("front");
   const [showThumbs, setShowThumbs] = useState(true);
+  const [zoom, setZoom] = useState(1);
+  const [dragging, setDragging] = useState(false);
   const [progress, setProgress] = useState<string | null>(null);
   const [tab, setTab] = useState<"sheet" | "plan" | "fold">("sheet");
   const inputRef = useRef<HTMLInputElement>(null);
+
 
   const set = <K extends keyof ImpositionConfig>(k: K, v: ImpositionConfig[K]) =>
     setCfg((c) => ({ ...c, [k]: v }));
@@ -302,14 +305,14 @@ function Workstation() {
         </section>
 
         {/* CENTER: preview */}
-        <section className="panel flex min-h-[70vh] min-w-0 flex-col p-4">
+        <section className="panel flex min-h-0 min-w-0 flex-col p-4">
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <Segmented
               value={tab}
               onChange={(v) => setTab(v as typeof tab)}
               options={[
                 { value: "sheet", label: "Press sheet" },
-                { value: "plan", label: "Imposition plan" },
+                { value: "plan", label: "Plan" },
                 { value: "fold", label: "Fold & stack" },
               ]}
             />
@@ -325,17 +328,39 @@ function Workstation() {
                 />
                 <div className="ml-auto flex items-center gap-2 font-mono text-xs text-muted-foreground">
                   <button
+                    aria-label="Zoom out"
                     className="rounded-sm border border-border px-2 py-1 hover:border-primary"
-                    onClick={() => setSheetIndex((i) => Math.max(0, i - 1))}
+                    onClick={() => setZoom((z) => Math.max(0.5, +(z - 0.25).toFixed(2)))}
+                  >
+                    −
+                  </button>
+                  <span className="tabular-nums">{Math.round(zoom * 100)}%</span>
+                  <button
+                    aria-label="Zoom in"
+                    className="rounded-sm border border-border px-2 py-1 hover:border-primary"
+                    onClick={() => setZoom((z) => Math.min(4, +(z + 0.25).toFixed(2)))}
+                  >
+                    +
+                  </button>
+                  <span className="mx-1 h-4 w-px bg-border" />
+                  <button
+                    aria-label="Previous sheet"
+                    className="rounded-sm border border-border px-2 py-1 hover:border-primary disabled:opacity-40"
+                    disabled={clampedIndex === 0}
+                    onClick={() => setSheetIndex(Math.max(0, clampedIndex - 1))}
                   >
                     ←
                   </button>
                   <span>
-                    Sheet {Math.min(sheetIndex, plan.sheets.length - 1) + 1} / {plan.sheets.length}
+                    Sheet {clampedIndex + 1} / {plan.sheets.length}
                   </span>
                   <button
-                    className="rounded-sm border border-border px-2 py-1 hover:border-primary"
-                    onClick={() => setSheetIndex((i) => Math.min(plan.sheets.length - 1, i + 1))}
+                    aria-label="Next sheet"
+                    className="rounded-sm border border-border px-2 py-1 hover:border-primary disabled:opacity-40"
+                    disabled={clampedIndex >= plan.sheets.length - 1}
+                    onClick={() =>
+                      setSheetIndex(Math.min(plan.sheets.length - 1, clampedIndex + 1))
+                    }
                   >
                     →
                   </button>
@@ -345,16 +370,38 @@ function Workstation() {
           </div>
 
           {tab === "sheet" && (
-            <div className="flex flex-1 items-center justify-center overflow-auto rounded-sm bg-background/60 p-4">
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragging(true);
+              }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragging(false);
+                const f = e.dataTransfer.files?.[0];
+                if (f) void onFile(f);
+              }}
+              className={`relative flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-sm bg-background/60 transition-colors ${
+                dragging ? "ring-2 ring-primary" : ""
+              }`}
+            >
               <SheetPreview
                 plan={plan}
                 cfg={cfg}
                 placements={placements}
                 doc={doc}
                 showThumbs={showThumbs}
+                zoom={zoom}
               />
+              {!doc && (
+                <p className="label-caps pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 text-center">
+                  drop a pdf here or press open pdf — demo book shown
+                </p>
+              )}
             </div>
           )}
+
 
           {tab === "plan" && (
             <div className="flex-1 overflow-auto rounded-sm bg-background/60 p-3">
@@ -470,11 +517,14 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block space-y-1">
-      <span className="label-caps">{label}</span>
+      <span className="label-caps block truncate" title={label}>
+        {label}
+      </span>
       {children}
     </label>
   );
 }
+
 
 function Num({
   label,
