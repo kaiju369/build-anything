@@ -55,9 +55,12 @@ function Workstation() {
   const [sheetIndex, setSheetIndex] = useState(0);
   const [side, setSide] = useState<"front" | "back">("front");
   const [showThumbs, setShowThumbs] = useState(true);
+  const [zoom, setZoom] = useState(1);
+  const [dragging, setDragging] = useState(false);
   const [progress, setProgress] = useState<string | null>(null);
   const [tab, setTab] = useState<"sheet" | "plan" | "fold">("sheet");
   const inputRef = useRef<HTMLInputElement>(null);
+
 
   const set = <K extends keyof ImpositionConfig>(k: K, v: ImpositionConfig[K]) =>
     setCfg((c) => ({ ...c, [k]: v }));
