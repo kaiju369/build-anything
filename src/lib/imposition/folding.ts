@@ -50,8 +50,8 @@ export function applyFold(state: FoldState, axis: "x" | "y"): FoldState {
     for (let r = 0; r < rows; r++) {
       const rowArr: Leaf[][] = [];
       for (let c = 0; c < half; c++) {
-        const keep = grid[r][c + half];
-        const moved = grid[r][half - 1 - c]
+        const keep = grid[r]![c + half]!;
+        const moved = grid[r]![half - 1 - c]!
           .slice()
           .reverse()
           .map((l) => ({ ...l, flipX: !l.flipX, frontUp: !l.frontUp }));
@@ -67,8 +67,8 @@ export function applyFold(state: FoldState, axis: "x" | "y"): FoldState {
   for (let r = 0; r < half; r++) {
     const rowArr: Leaf[][] = [];
     for (let c = 0; c < cols; c++) {
-      const keep = grid[r + half][c];
-      const moved = grid[half - 1 - r][c]
+      const keep = grid[r + half]![c]!;
+      const moved = grid[half - 1 - r]![c]!
         .slice()
         .reverse()
         .map((l) => ({ ...l, flipY: !l.flipY, frontUp: !l.frontUp }));
@@ -82,7 +82,7 @@ export function applyFold(state: FoldState, axis: "x" | "y"): FoldState {
 export function simulate(cols: number, rows: number, sequence: FoldOp[]): Leaf[] {
   let state = createSheet(cols, rows);
   for (const op of sequence) state = applyFold(state, op.axis);
-  return state.grid[0][0];
+  return state.grid[0]![0]!;
 }
 
 /** Derive a fold sequence that collapses a cols x rows grid (powers of two). */
