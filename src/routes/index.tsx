@@ -146,7 +146,7 @@ function Workstation() {
         />
       </header>
 
-      <main className="grid gap-4 p-4 xl:grid-cols-[320px_1fr_290px]">
+      <main className="grid gap-4 p-4 xl:grid-cols-[300px_minmax(0,1fr)_280px]">
         {/* LEFT: imposition setup */}
         <section className="panel h-fit space-y-5 p-4">
           <Group title="Binding">
@@ -302,7 +302,7 @@ function Workstation() {
         </section>
 
         {/* CENTER: preview */}
-        <section className="panel flex min-h-[70vh] flex-col p-4">
+        <section className="panel flex min-h-[70vh] min-w-0 flex-col p-4">
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <Segmented
               value={tab}
