@@ -123,9 +123,7 @@
   font-size: 0.75rem;
   color: var(--color-foreground);
   outline: none;
-}
 
-@utility input {
   &:focus {
     border-color: var(--color-primary);
   }
