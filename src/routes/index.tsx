@@ -426,7 +426,8 @@ function Workstation() {
 
 
           {tab === "plan" && (
-            <div className="flex-1 overflow-auto rounded-sm bg-background/60 p-3">
+            <div className="min-h-0 flex-1 overflow-auto rounded-sm bg-background/60 p-3">
+
               <table className="w-full border-collapse font-mono text-xs">
                 <thead className="text-muted-foreground">
                   <tr className="[&>th]:border-b [&>th]:border-border [&>th]:px-2 [&>th]:py-1.5 [&>th]:text-left">
