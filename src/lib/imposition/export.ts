@@ -118,8 +118,10 @@ function drawCropMarks(page: AnyPage, pl: Placement) {
 
 function drawFoldMarks(page: AnyPage, plan: ImpositionPlan, cfg: ImpositionConfig) {
   const c = rgb(0.7, 0.7, 0.7);
+  const liveW = cfg.sheetWidth - cfg.marginLeft - cfg.marginRight;
+  const liveH = cfg.sheetHeight - cfg.marginTop - cfg.marginBottom;
   for (let i = 1; i < plan.cols; i++) {
-    const x = (cfg.sheetWidth / plan.cols) * i;
+    const x = cfg.marginLeft + (liveW / plan.cols) * i;
     page.drawLine({
       start: { x, y: 0 },
       end: { x, y: 6 },
@@ -136,7 +138,7 @@ function drawFoldMarks(page: AnyPage, plan: ImpositionPlan, cfg: ImpositionConfi
     });
   }
   for (let i = 1; i < plan.rows; i++) {
-    const y = (cfg.sheetHeight / plan.rows) * i;
+    const y = cfg.marginBottom + (liveH / plan.rows) * i;
     page.drawLine({
       start: { x: 0, y },
       end: { x: 6, y },
@@ -144,5 +146,13 @@ function drawFoldMarks(page: AnyPage, plan: ImpositionPlan, cfg: ImpositionConfi
       color: c,
       dashArray: [2, 2],
     });
+    page.drawLine({
+      start: { x: cfg.sheetWidth - 6, y },
+      end: { x: cfg.sheetWidth, y },
+      thickness: 0.3,
+      color: c,
+      dashArray: [2, 2],
+    });
   }
 }
+
