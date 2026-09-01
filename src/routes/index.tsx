@@ -486,7 +486,7 @@ function Workstation() {
         </section>
 
         {/* RIGHT: inspector */}
-        <section className="panel h-fit space-y-4 p-4">
+        <section className="panel space-y-4 overflow-y-auto p-4 xl:h-full">
           <Group title="Document">
             <Stat k="Source pages" v={doc ? String(doc.pageCount) : "demo · 32"} />
             <Stat
