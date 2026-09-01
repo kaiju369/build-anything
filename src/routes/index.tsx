@@ -78,36 +78,54 @@ function Workstation() {
   const placements = side === "front" ? sheet.front : sheet.back;
 
 
+  const [busy, setBusy] = useState(false);
+
   const onFile = useCallback(async (file: File) => {
-    const buf = await file.arrayBuffer();
-    setBytes(buf);
-    setFileName(file.name);
-    setSheetIndex(0);
+    if (file.type !== "application/pdf" && !/\.pdf$/i.test(file.name)) {
+      setProgress("That file is not a PDF.");
+      return;
+    }
+    setBusy(true);
     setProgress("Reading document…");
     try {
+      const buf = await file.arrayBuffer();
       const loaded = await loadPdf(buf);
+      setBytes(buf);
+      setFileName(file.name);
+      setSheetIndex(0);
       setDoc(loaded);
       setProgress(null);
     } catch {
-      setProgress("Could not read that PDF.");
+      setProgress("Could not read that PDF — it may be encrypted or damaged.");
+    } finally {
+      setBusy(false);
     }
   }, []);
 
   const doExport = async () => {
-    if (!bytes) return;
+    if (!bytes || busy) return;
+    setBusy(true);
     setProgress("Imposing…");
-    const out = await exportImposedPdf(bytes, plan, cfg, (d, t) =>
-      setProgress(`Imposing surface ${d} / ${t}`),
-    );
-    const blob = new Blob([out as unknown as BlobPart], { type: "application/pdf" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = fileName.replace(/\.pdf$/i, "") + "-imposed.pdf";
-    a.click();
-    URL.revokeObjectURL(url);
-    setProgress(null);
+    try {
+      const out = await exportImposedPdf(bytes, plan, cfg, (d, t) =>
+        setProgress(`Imposing surface ${d} / ${t}`),
+      );
+      const blob = new Blob([out as unknown as BlobPart], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = (fileName.replace(/\.pdf$/i, "") || "document") + "-imposed.pdf";
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+      setProgress("Export complete.");
+      setTimeout(() => setProgress(null), 2500);
+    } catch (err) {
+      setProgress(`Export failed: ${err instanceof Error ? err.message : "unknown error"}`);
+    } finally {
+      setBusy(false);
+    }
   };
+
 
   const toPt = (v: number) => v * UNIT_TO_PT[unit];
   const fromPt = (v: number) => +(v / UNIT_TO_PT[unit]).toFixed(2);
