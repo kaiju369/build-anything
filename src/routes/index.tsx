@@ -113,18 +113,18 @@ function Workstation() {
   const fromPt = (v: number) => +(v / UNIT_TO_PT[unit]).toFixed(2);
 
   return (
-    <div className="min-h-screen">
-      <header className="sticky top-0 z-20 flex flex-wrap items-center gap-4 border-b border-border bg-background/85 px-5 py-3 backdrop-blur">
+    <div className="flex h-dvh flex-col overflow-hidden">
+      <header className="z-20 flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-border bg-background/85 px-5 py-3 backdrop-blur">
         <div className="flex items-baseline gap-3">
           <span className="font-mono text-sm font-semibold tracking-[0.2em] text-primary">
             IMPOSER
           </span>
-          <h1 className="text-sm text-muted-foreground">
+          <h1 className="hidden text-sm text-muted-foreground sm:block">
             Local PDF book imposition &amp; prepress workstation
           </h1>
         </div>
         <div className="ml-auto flex items-center gap-3">
-          <span className="label-caps">{fileName || "no document"}</span>
+          <span className="label-caps max-w-[22ch] truncate">{fileName || "no document"}</span>
           <button
             onClick={() => inputRef.current?.click()}
             className="rounded-sm border border-border bg-secondary px-3 py-1.5 font-mono text-xs uppercase tracking-widest text-secondary-foreground transition-colors hover:border-primary"
@@ -133,10 +133,10 @@ function Workstation() {
           </button>
           <button
             onClick={doExport}
-            disabled={!bytes}
+            disabled={!bytes || busy}
             className="rounded-sm bg-primary px-3 py-1.5 font-mono text-xs uppercase tracking-widest text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
           >
-            Export imposed PDF
+            {busy ? "Working…" : "Export imposed PDF"}
           </button>
         </div>
         <input
@@ -147,13 +147,15 @@ function Workstation() {
           onChange={(e) => {
             const f = e.target.files?.[0];
             if (f) void onFile(f);
+            e.target.value = "";
           }}
         />
       </header>
 
-      <main className="grid gap-4 p-4 xl:grid-cols-[300px_minmax(0,1fr)_280px]">
+      <main className="grid min-h-0 flex-1 gap-4 overflow-auto p-4 xl:grid-cols-[300px_minmax(0,1fr)_280px] xl:overflow-hidden">
         {/* LEFT: imposition setup */}
-        <section className="panel h-fit space-y-5 p-4">
+        <section className="panel space-y-5 overflow-y-auto p-4 xl:h-full">
+
           <Group title="Binding">
             <Segmented
               value={cfg.mode}
