@@ -17,9 +17,21 @@ export async function exportImposedPdf(
       if (p.logicalNumber <= srcCount) needed.add(p.logicalNumber - 1);
 
   const indices = [...needed].sort((a, b) => a - b);
-  const embedded = await out.embedPdf(src, indices);
-  const byIndex = new Map<number, (typeof embedded)[number]>();
-  indices.forEach((idx, i) => byIndex.set(idx, embedded[i]!));
+  type Embedded = Awaited<ReturnType<PDFDocument["embedPdf"]>>[number];
+  const byIndex = new Map<number, Embedded>();
+  for (const idx of indices) {
+    try {
+      // Skip pages with no content stream: pdf-lib cannot embed them and would
+      // otherwise abort the whole export at save time.
+      if (!src.getPage(idx).node.Contents()) continue;
+      const [emb] = await out.embedPdf(src, [idx]);
+      if (emb) byIndex.set(idx, emb);
+    } catch {
+      // leave the cell blank
+    }
+  }
+
+
 
   const surfaces: { placements: Placement[]; label: string }[] = [];
   for (const sheet of plan.sheets) {
@@ -109,8 +121,10 @@ function drawCropMarks(page: AnyPage, pl: Placement) {
 
 function drawFoldMarks(page: AnyPage, plan: ImpositionPlan, cfg: ImpositionConfig) {
   const c = rgb(0.7, 0.7, 0.7);
+  const liveW = cfg.sheetWidth - cfg.marginLeft - cfg.marginRight;
+  const liveH = cfg.sheetHeight - cfg.marginTop - cfg.marginBottom;
   for (let i = 1; i < plan.cols; i++) {
-    const x = (cfg.sheetWidth / plan.cols) * i;
+    const x = cfg.marginLeft + (liveW / plan.cols) * i;
     page.drawLine({
       start: { x, y: 0 },
       end: { x, y: 6 },
@@ -127,7 +141,7 @@ function drawFoldMarks(page: AnyPage, plan: ImpositionPlan, cfg: ImpositionConfi
     });
   }
   for (let i = 1; i < plan.rows; i++) {
-    const y = (cfg.sheetHeight / plan.rows) * i;
+    const y = cfg.marginBottom + (liveH / plan.rows) * i;
     page.drawLine({
       start: { x: 0, y },
       end: { x: 6, y },
@@ -135,5 +149,13 @@ function drawFoldMarks(page: AnyPage, plan: ImpositionPlan, cfg: ImpositionConfi
       color: c,
       dashArray: [2, 2],
     });
+    page.drawLine({
+      start: { x: cfg.sheetWidth - 6, y },
+      end: { x: cfg.sheetWidth, y },
+      thickness: 0.3,
+      color: c,
+      dashArray: [2, 2],
+    });
   }
 }
+

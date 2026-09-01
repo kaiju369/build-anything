@@ -73,56 +73,76 @@ function Workstation() {
     [pageCount, pageSize, cfg],
   );
 
-  const sheet = plan.sheets[Math.min(sheetIndex, plan.sheets.length - 1)]!;
+  const clampedIndex = Math.max(0, Math.min(sheetIndex, plan.sheets.length - 1));
+  const sheet = plan.sheets[clampedIndex]!;
   const placements = side === "front" ? sheet.front : sheet.back;
 
+
+  const [busy, setBusy] = useState(false);
+
   const onFile = useCallback(async (file: File) => {
-    const buf = await file.arrayBuffer();
-    setBytes(buf);
-    setFileName(file.name);
-    setSheetIndex(0);
+    if (file.type !== "application/pdf" && !/\.pdf$/i.test(file.name)) {
+      setProgress("That file is not a PDF.");
+      return;
+    }
+    setBusy(true);
     setProgress("Reading document…");
     try {
+      const buf = await file.arrayBuffer();
       const loaded = await loadPdf(buf);
+      setBytes(buf);
+      setFileName(file.name);
+      setSheetIndex(0);
       setDoc(loaded);
       setProgress(null);
     } catch {
-      setProgress("Could not read that PDF.");
+      setProgress("Could not read that PDF — it may be encrypted or damaged.");
+    } finally {
+      setBusy(false);
     }
   }, []);
 
   const doExport = async () => {
-    if (!bytes) return;
+    if (!bytes || busy) return;
+    setBusy(true);
     setProgress("Imposing…");
-    const out = await exportImposedPdf(bytes, plan, cfg, (d, t) =>
-      setProgress(`Imposing surface ${d} / ${t}`),
-    );
-    const blob = new Blob([out as unknown as BlobPart], { type: "application/pdf" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = fileName.replace(/\.pdf$/i, "") + "-imposed.pdf";
-    a.click();
-    URL.revokeObjectURL(url);
-    setProgress(null);
+    try {
+      const out = await exportImposedPdf(bytes, plan, cfg, (d, t) =>
+        setProgress(`Imposing surface ${d} / ${t}`),
+      );
+      const blob = new Blob([out as unknown as BlobPart], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = (fileName.replace(/\.pdf$/i, "") || "document") + "-imposed.pdf";
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+      setProgress("Export complete.");
+      setTimeout(() => setProgress(null), 2500);
+    } catch (err) {
+      setProgress(`Export failed: ${err instanceof Error ? err.message : "unknown error"}`);
+    } finally {
+      setBusy(false);
+    }
   };
+
 
   const toPt = (v: number) => v * UNIT_TO_PT[unit];
   const fromPt = (v: number) => +(v / UNIT_TO_PT[unit]).toFixed(2);
 
   return (
-    <div className="min-h-screen">
-      <header className="sticky top-0 z-20 flex flex-wrap items-center gap-4 border-b border-border bg-background/85 px-5 py-3 backdrop-blur">
+    <div className="flex h-dvh flex-col overflow-hidden">
+      <header className="z-20 flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-border bg-background/85 px-5 py-3 backdrop-blur">
         <div className="flex items-baseline gap-3">
           <span className="font-mono text-sm font-semibold tracking-[0.2em] text-primary">
             IMPOSER
           </span>
-          <h1 className="text-sm text-muted-foreground">
+          <h1 className="hidden text-sm text-muted-foreground sm:block">
             Local PDF book imposition &amp; prepress workstation
           </h1>
         </div>
         <div className="ml-auto flex items-center gap-3">
-          <span className="label-caps">{fileName || "no document"}</span>
+          <span className="label-caps max-w-[22ch] truncate">{fileName || "no document"}</span>
           <button
             onClick={() => inputRef.current?.click()}
             className="rounded-sm border border-border bg-secondary px-3 py-1.5 font-mono text-xs uppercase tracking-widest text-secondary-foreground transition-colors hover:border-primary"
@@ -131,10 +151,10 @@ function Workstation() {
           </button>
           <button
             onClick={doExport}
-            disabled={!bytes}
+            disabled={!bytes || busy}
             className="rounded-sm bg-primary px-3 py-1.5 font-mono text-xs uppercase tracking-widest text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
           >
-            Export imposed PDF
+            {busy ? "Working…" : "Export imposed PDF"}
           </button>
         </div>
         <input
@@ -145,13 +165,15 @@ function Workstation() {
           onChange={(e) => {
             const f = e.target.files?.[0];
             if (f) void onFile(f);
+            e.target.value = "";
           }}
         />
       </header>
 
-      <main className="grid gap-4 p-4 xl:grid-cols-[300px_minmax(0,1fr)_280px]">
+      <main className="grid min-h-0 flex-1 gap-4 overflow-auto p-4 xl:grid-cols-[300px_minmax(0,1fr)_280px] xl:overflow-hidden">
         {/* LEFT: imposition setup */}
-        <section className="panel h-fit space-y-5 p-4">
+        <section className="panel space-y-5 overflow-y-auto p-4 xl:h-full">
+
           <Group title="Binding">
             <Segmented
               value={cfg.mode}
@@ -195,16 +217,17 @@ function Workstation() {
                 ))}
               </select>
             </Field>
-            <Field label="Duplex">
+            <Field label="Duplex flip">
               <Segmented
                 value={cfg.duplex}
                 onChange={(v) => set("duplex", v as "long" | "short")}
                 options={[
-                  { value: "long", label: "Flip long edge" },
-                  { value: "short", label: "Flip short edge" },
+                  { value: "long", label: "Long edge" },
+                  { value: "short", label: "Short edge" },
                 ]}
               />
             </Field>
+
           </Group>
 
           <Group title="Press sheet">
@@ -404,7 +427,8 @@ function Workstation() {
 
 
           {tab === "plan" && (
-            <div className="flex-1 overflow-auto rounded-sm bg-background/60 p-3">
+            <div className="min-h-0 flex-1 overflow-auto rounded-sm bg-background/60 p-3">
+
               <table className="w-full border-collapse font-mono text-xs">
                 <thead className="text-muted-foreground">
                   <tr className="[&>th]:border-b [&>th]:border-border [&>th]:px-2 [&>th]:py-1.5 [&>th]:text-left">
@@ -415,21 +439,32 @@ function Workstation() {
                   </tr>
                 </thead>
                 <tbody>
-                  {plan.sheets.map((s) => (
-                    <tr key={s.id} className="[&>td]:border-b [&>td]:border-border/60 [&>td]:px-2 [&>td]:py-1.5 align-top">
+                  {plan.sheets.map((s, i) => (
+                    <tr
+                      key={s.id}
+                      onClick={() => {
+                        setSheetIndex(i);
+                        setTab("sheet");
+                      }}
+                      className={`cursor-pointer align-top transition-colors hover:bg-secondary/60 [&>td]:border-b [&>td]:border-border/60 [&>td]:px-2 [&>td]:py-1.5 ${
+                        i === clampedIndex ? "bg-secondary/40" : ""
+                      }`}
+                    >
                       <td className="text-primary">{s.id}</td>
                       <td>{s.signatureIndex + 1}</td>
                       <td>{s.front.map((p) => `r${p.cell.row}c${p.cell.col}→${p.logicalNumber}${p.rotation ? "↻" : ""}`).join("  ")}</td>
                       <td>{s.back.map((p) => `r${p.cell.row}c${p.cell.col}→${p.logicalNumber}${p.rotation ? "↻" : ""}`).join("  ")}</td>
                     </tr>
                   ))}
+
                 </tbody>
               </table>
             </div>
           )}
 
           {tab === "fold" && (
-            <div className="flex-1 space-y-4 overflow-auto rounded-sm bg-background/60 p-4 font-mono text-xs">
+            <div className="min-h-0 flex-1 space-y-4 overflow-auto rounded-sm bg-background/60 p-4 font-mono text-xs">
+
               <div>
                 <div className="label-caps mb-1">Fold sequence</div>
                 <div className="text-foreground">
@@ -464,7 +499,7 @@ function Workstation() {
         </section>
 
         {/* RIGHT: inspector */}
-        <section className="panel h-fit space-y-4 p-4">
+        <section className="panel space-y-4 overflow-y-auto p-4 xl:h-full">
           <Group title="Document">
             <Stat k="Source pages" v={doc ? String(doc.pageCount) : "demo · 32"} />
             <Stat
@@ -587,7 +622,7 @@ function Segmented({
         <button
           key={o.value}
           onClick={() => onChange(o.value)}
-          className={`flex-1 rounded-[3px] px-2 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors ${
+          className={`flex-1 whitespace-nowrap rounded-[3px] px-2.5 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors ${
             value === o.value
               ? "bg-primary text-primary-foreground"
               : "text-muted-foreground hover:text-foreground"
