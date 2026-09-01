@@ -17,9 +17,18 @@ export async function exportImposedPdf(
       if (p.logicalNumber <= srcCount) needed.add(p.logicalNumber - 1);
 
   const indices = [...needed].sort((a, b) => a - b);
-  const embedded = await out.embedPdf(src, indices);
-  const byIndex = new Map<number, (typeof embedded)[number]>();
-  indices.forEach((idx, i) => byIndex.set(idx, embedded[i]!));
+  type Embedded = Awaited<ReturnType<PDFDocument["embedPdf"]>>[number];
+  const byIndex = new Map<number, Embedded>();
+  for (const idx of indices) {
+    try {
+      // Embed page-by-page so one damaged/empty source page cannot abort the job.
+      const [emb] = await out.embedPdf(src, [idx]);
+      if (emb) byIndex.set(idx, emb);
+    } catch {
+      // leave the cell blank
+    }
+  }
+
 
   const surfaces: { placements: Placement[]; label: string }[] = [];
   for (const sheet of plan.sheets) {
