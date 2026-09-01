@@ -612,7 +612,7 @@ function Segmented({
         <button
           key={o.value}
           onClick={() => onChange(o.value)}
-          className={`flex-1 rounded-[3px] px-2 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors ${
+          className={`flex-1 whitespace-nowrap rounded-[3px] px-2.5 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors ${
             value === o.value
               ? "bg-primary text-primary-foreground"
               : "text-muted-foreground hover:text-foreground"
