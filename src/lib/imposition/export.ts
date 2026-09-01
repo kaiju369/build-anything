@@ -23,7 +23,10 @@ export async function exportImposedPdf(
     try {
       // Embed page-by-page so one damaged/empty source page cannot abort the job.
       const [emb] = await out.embedPdf(src, [idx]);
-      if (emb) byIndex.set(idx, emb);
+      if (emb) {
+        await emb.embed(); // force resolution now so failures are caught here
+        byIndex.set(idx, emb);
+      }
     } catch {
       // leave the cell blank
     }
