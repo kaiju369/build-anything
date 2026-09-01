@@ -217,16 +217,17 @@ function Workstation() {
                 ))}
               </select>
             </Field>
-            <Field label="Duplex">
+            <Field label="Duplex flip">
               <Segmented
                 value={cfg.duplex}
                 onChange={(v) => set("duplex", v as "long" | "short")}
                 options={[
-                  { value: "long", label: "Flip long edge" },
-                  { value: "short", label: "Flip short edge" },
+                  { value: "long", label: "Long edge" },
+                  { value: "short", label: "Short edge" },
                 ]}
               />
             </Field>
+
           </Group>
 
           <Group title="Press sheet">
