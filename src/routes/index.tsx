@@ -452,7 +452,8 @@ function Workstation() {
           )}
 
           {tab === "fold" && (
-            <div className="flex-1 space-y-4 overflow-auto rounded-sm bg-background/60 p-4 font-mono text-xs">
+            <div className="min-h-0 flex-1 space-y-4 overflow-auto rounded-sm bg-background/60 p-4 font-mono text-xs">
+
               <div>
                 <div className="label-caps mb-1">Fold sequence</div>
                 <div className="text-foreground">
