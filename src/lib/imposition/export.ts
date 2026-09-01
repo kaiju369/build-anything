@@ -21,16 +21,16 @@ export async function exportImposedPdf(
   const byIndex = new Map<number, Embedded>();
   for (const idx of indices) {
     try {
-      // Embed page-by-page so one damaged/empty source page cannot abort the job.
+      // Skip pages with no content stream: pdf-lib cannot embed them and would
+      // otherwise abort the whole export at save time.
+      if (!src.getPage(idx).node.Contents()) continue;
       const [emb] = await out.embedPdf(src, [idx]);
-      if (emb) {
-        await emb.embed(); // force resolution now so failures are caught here
-        byIndex.set(idx, emb);
-      }
+      if (emb) byIndex.set(idx, emb);
     } catch {
       // leave the cell blank
     }
   }
+
 
 
   const surfaces: { placements: Placement[]; label: string }[] = [];
