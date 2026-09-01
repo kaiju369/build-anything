@@ -439,14 +439,24 @@ function Workstation() {
                   </tr>
                 </thead>
                 <tbody>
-                  {plan.sheets.map((s) => (
-                    <tr key={s.id} className="[&>td]:border-b [&>td]:border-border/60 [&>td]:px-2 [&>td]:py-1.5 align-top">
+                  {plan.sheets.map((s, i) => (
+                    <tr
+                      key={s.id}
+                      onClick={() => {
+                        setSheetIndex(i);
+                        setTab("sheet");
+                      }}
+                      className={`cursor-pointer align-top transition-colors hover:bg-secondary/60 [&>td]:border-b [&>td]:border-border/60 [&>td]:px-2 [&>td]:py-1.5 ${
+                        i === clampedIndex ? "bg-secondary/40" : ""
+                      }`}
+                    >
                       <td className="text-primary">{s.id}</td>
                       <td>{s.signatureIndex + 1}</td>
                       <td>{s.front.map((p) => `r${p.cell.row}c${p.cell.col}→${p.logicalNumber}${p.rotation ? "↻" : ""}`).join("  ")}</td>
                       <td>{s.back.map((p) => `r${p.cell.row}c${p.cell.col}→${p.logicalNumber}${p.rotation ? "↻" : ""}`).join("  ")}</td>
                     </tr>
                   ))}
+
                 </tbody>
               </table>
             </div>
