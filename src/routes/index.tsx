@@ -73,8 +73,10 @@ function Workstation() {
     [pageCount, pageSize, cfg],
   );
 
-  const sheet = plan.sheets[Math.min(sheetIndex, plan.sheets.length - 1)]!;
+  const clampedIndex = Math.max(0, Math.min(sheetIndex, plan.sheets.length - 1));
+  const sheet = plan.sheets[clampedIndex]!;
   const placements = side === "front" ? sheet.front : sheet.back;
+
 
   const onFile = useCallback(async (file: File) => {
     const buf = await file.arrayBuffer();
