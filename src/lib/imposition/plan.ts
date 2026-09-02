@@ -222,17 +222,19 @@ function makePlacement(
   cols: number,
 ): Placement {
   const fitted = fitPage(cell, pageSize, rotation, cfg);
-  // Creep pushes pages away from the fold/binding as sheets nest inward.
+  // The cell passed in for a back surface is already mirrored, so its own
+  // position relative to the spine gives the correct sign. Negating again
+  // would throw front and back out of register.
   const towardOuter = cell.col < cols / 2 ? -1 : 1;
-  const bindingOffset =
-    cfg.bindingGutter * (cell.col < cols / 2 ? -0.5 : 0.5) + creepShift * towardOuter;
+  // Binding gutter opens the spine; creep pulls nested sheets back toward it.
+  const bindingOffset = (cfg.bindingGutter / 2) * towardOuter - creepShift * towardOuter;
   return {
     logicalNumber,
     sourcePageIndex: logicalNumber - 1,
     sheetId: `S${signatureIndex + 1}-${sheetIndexInSignature + 1}`,
     signatureIndex,
     side,
-    x: fitted.x + (side === "back" ? -bindingOffset : bindingOffset),
+    x: fitted.x + bindingOffset,
     y: fitted.y,
     width: fitted.w,
     height: fitted.h,
