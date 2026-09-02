@@ -96,7 +96,54 @@ export interface ImpositionConfig {
   registration: boolean;
   pageLabels: boolean;
   slug: string;
+  /** Put the cover surface (last|first page) on the front of sheet 1. */
+  coverFirst: boolean;
+  /** N-up only: how source pages walk the grid. */
+  nupOrder: NupOrder;
+  /** Print one side only (backs are still planned, just not exported). */
+  singleSided: boolean;
+  /** Stepped spine marks so gathered signatures can be checked at a glance. */
+  collationMarks: boolean;
+  colors: MarkColors;
 }
+
+export const MARK_PALETTES: Record<string, MarkColors> = {
+  Registration: {
+    crop: "#000000",
+    fold: "#7a7a7a",
+    label: "#8a8a8a",
+    slug: "#6e6e6e",
+    registration: "#000000",
+  },
+  Cyan: {
+    crop: "#0a7ea4",
+    fold: "#37b6d9",
+    label: "#0a7ea4",
+    slug: "#0a7ea4",
+    registration: "#0a7ea4",
+  },
+  Magenta: {
+    crop: "#c2185b",
+    fold: "#e07bab",
+    label: "#c2185b",
+    slug: "#c2185b",
+    registration: "#c2185b",
+  },
+  Amber: {
+    crop: "#b26a00",
+    fold: "#e0a44b",
+    label: "#b26a00",
+    slug: "#b26a00",
+    registration: "#b26a00",
+  },
+  Blueprint: {
+    crop: "#1d3f8f",
+    fold: "#5b7fd4",
+    label: "#1d3f8f",
+    slug: "#1d3f8f",
+    registration: "#1d3f8f",
+  },
+};
 
 export const defaultConfig: ImpositionConfig = {
   mode: "saddle",
