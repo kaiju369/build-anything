@@ -168,6 +168,11 @@ export const defaultConfig: ImpositionConfig = {
   registration: false,
   pageLabels: false,
   slug: "",
+  coverFirst: true,
+  nupOrder: "sequential",
+  singleSided: false,
+  collationMarks: false,
+  colors: MARK_PALETTES["Registration"]!,
 };
 
 export const PAPER_PRESETS: Record<string, [number, number]> = {
