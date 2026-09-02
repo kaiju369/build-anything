@@ -73,6 +73,25 @@ export function buildPlan(
   const cells = buildGrid(cfg, cols, rows);
   const perSide = cols * rows;
 
+  // Live geometry checks — these re-run on every edit.
+  const cell0 = cells[0]!;
+  if (cell0.w <= 0 || cell0.h <= 0) {
+    warnings.push("Margins and gutters exceed the press sheet — no printable cell remains.");
+  } else {
+    const fitted = fitPage(cell0, pageSize, 0, cfg);
+    if (fitted.w > cell0.w + 0.01 || fitted.h > cell0.h + 0.01)
+      warnings.push(
+        `Page is larger than its cell by ${Math.max(fitted.w - cell0.w, fitted.h - cell0.h).toFixed(1)} pt — switch scaling to Fit or enlarge the sheet.`,
+      );
+    if (cfg.bleed > 0 && cfg.bleed * 2 > Math.min(cfg.gutterX, cfg.gutterY) && cols * rows > 1)
+      warnings.push("Bleed is wider than the gutter — adjacent pages will bleed into each other.");
+    if (cfg.bindingGutter / 2 + fitted.w > cell0.w + 0.01)
+      warnings.push("Binding gutter pushes content past the cell edge.");
+    const minMargin = Math.min(cfg.marginTop, cfg.marginBottom, cfg.marginLeft, cfg.marginRight);
+    if (cfg.cropMarks && minMargin < cfg.bleed + 12)
+      warnings.push("Margin is too tight for crop marks — allow at least bleed + 12 pt.");
+  }
+
   if (cfg.mode === "nup") {
     return buildNupPlan(totalSourcePages, pageSize, cfg, cells, cols, rows, warnings);
   }
@@ -114,7 +133,9 @@ export function buildPlan(
     for (let s = 0; s < sheetsPerSignature; s++) {
       const front: Placement[] = [];
       const back: Placement[] = [];
-      const creepShift = cfg.creep * (sheetsPerSignature - 1 - s);
+      // Sheet 0 is the outermost wrap and needs no compensation; each sheet
+      // nested inside it is pushed toward the spine by one creep step.
+      const creepShift = cfg.mode === "saddle" ? cfg.creep * s : 0;
 
       leaves.forEach((leaf, j) => {
         const globalLeaf =
@@ -148,12 +169,21 @@ export function buildPlan(
         );
       });
 
+      // Press convention: the surface carrying the first page of the
+      // signature (the cover on sheet 1) runs first. Swapping the two
+      // surfaces keeps registration intact — the same physical sheet is
+      // simply fed the other way round.
+      const coverOnBack =
+        cfg.coverFirst && back.some((p) => p.logicalNumber === sigFirst);
+      const surfaceA = coverOnBack ? relabel(back, "front") : front;
+      const surfaceB = coverOnBack ? relabel(front, "back") : back;
+
       sheets.push({
         id: `S${sig + 1}-${s + 1}`,
         signatureIndex: sig,
         sheetIndexInSignature: s,
-        front,
-        back,
+        front: surfaceA,
+        back: surfaceB,
       });
     }
   }
@@ -176,6 +206,10 @@ export function buildPlan(
     leafOrder: leaves.map((l) => l.row * cols + l.col),
     warnings,
   };
+}
+
+function relabel(list: Placement[], side: "front" | "back"): Placement[] {
+  return list.map((p) => ({ ...p, side }));
 }
 
 function mirrorCell(
@@ -211,17 +245,19 @@ function makePlacement(
   cols: number,
 ): Placement {
   const fitted = fitPage(cell, pageSize, rotation, cfg);
-  // Creep pushes pages away from the fold/binding as sheets nest inward.
+  // The cell passed in for a back surface is already mirrored, so its own
+  // position relative to the spine gives the correct sign. Negating again
+  // would throw front and back out of register.
   const towardOuter = cell.col < cols / 2 ? -1 : 1;
-  const bindingOffset =
-    cfg.bindingGutter * (cell.col < cols / 2 ? -0.5 : 0.5) + creepShift * towardOuter;
+  // Binding gutter opens the spine; creep pulls nested sheets back toward it.
+  const bindingOffset = (cfg.bindingGutter / 2) * towardOuter - creepShift * towardOuter;
   return {
     logicalNumber,
     sourcePageIndex: logicalNumber - 1,
     sheetId: `S${signatureIndex + 1}-${sheetIndexInSignature + 1}`,
     signatureIndex,
     side,
-    x: fitted.x + (side === "back" ? -bindingOffset : bindingOffset),
+    x: fitted.x + bindingOffset,
     y: fitted.y,
     width: fitted.w,
     height: fitted.h,
@@ -242,36 +278,57 @@ function buildNupPlan(
   warnings: string[],
 ): ImpositionPlan {
   const perSide = cols * rows;
-  const perSheet = perSide * 2;
+  const perSheet = cfg.singleSided ? perSide : perSide * 2;
   const totalPages = Math.ceil(totalSourcePages / perSheet) * perSheet;
   const sheetCount = totalPages / perSheet;
   const sheets: SheetPlan[] = [];
+
+  // How a source page number maps onto (sheet, surface slot).
+  // sequential : reading order down the stack, cut nothing
+  // cutstack   : slice the job into N piles; slot i takes its own pile, so
+  //              guillotining the stack once gives collated booklets
+  // repeat     : the same page fills every slot (business cards, labels)
+  const pageFor = (s: number, slot: number, surface: number) => {
+    const slotsPerSheet = cfg.singleSided ? perSide : perSide * 2;
+    if (cfg.nupOrder === "repeat") return s + 1;
+    if (cfg.nupOrder === "cutstack") {
+      const perPile = totalPages / perSide;
+      const withinPile = s * (cfg.singleSided ? 1 : 2) + surface;
+      return slot * perPile + withinPile + 1;
+    }
+    return s * slotsPerSheet + surface * perSide + slot + 1;
+  };
+
   for (let s = 0; s < sheetCount; s++) {
     const front: Placement[] = [];
     const back: Placement[] = [];
     cells.forEach((cell, i) => {
-      const fp = s * perSheet + i + 1;
-      front.push(makePlacement(fp, cell, pageSize, 0, cfg, 0, "front", s, 0, cols));
-    });
-    cells.forEach((cell, i) => {
-      const bp = s * perSheet + perSide + i + 1;
-      back.push(
-        makePlacement(
-          bp,
-          mirrorCell(cell, cfg, cols, rows),
-          pageSize,
-          0,
-          cfg,
-          0,
-          "back",
-          s,
-          0,
-          cols,
-        ),
+      front.push(
+        makePlacement(pageFor(s, i, 0), cell, pageSize, 0, cfg, 0, "front", s, 0, cols),
       );
     });
+    if (!cfg.singleSided) {
+      cells.forEach((cell, i) => {
+        back.push(
+          makePlacement(
+            pageFor(s, i, 1),
+            mirrorCell(cell, cfg, cols, rows),
+            pageSize,
+            0,
+            cfg,
+            0,
+            "back",
+            s,
+            0,
+            cols,
+          ),
+        );
+      });
+    }
     sheets.push({ id: `N-${s + 1}`, signatureIndex: 0, sheetIndexInSignature: s, front, back });
   }
+  if (cfg.nupOrder === "repeat")
+    warnings.push("Repeat mode duplicates one source page across every slot on a sheet.");
   return {
     sheetWidth: cfg.sheetWidth,
     sheetHeight: cfg.sheetHeight,
