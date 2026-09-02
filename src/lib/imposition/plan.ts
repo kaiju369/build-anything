@@ -73,6 +73,25 @@ export function buildPlan(
   const cells = buildGrid(cfg, cols, rows);
   const perSide = cols * rows;
 
+  // Live geometry checks — these re-run on every edit.
+  const cell0 = cells[0]!;
+  if (cell0.w <= 0 || cell0.h <= 0) {
+    warnings.push("Margins and gutters exceed the press sheet — no printable cell remains.");
+  } else {
+    const fitted = fitPage(cell0, pageSize, 0, cfg);
+    if (fitted.w > cell0.w + 0.01 || fitted.h > cell0.h + 0.01)
+      warnings.push(
+        `Page is larger than its cell by ${Math.max(fitted.w - cell0.w, fitted.h - cell0.h).toFixed(1)} pt — switch scaling to Fit or enlarge the sheet.`,
+      );
+    if (cfg.bleed > 0 && cfg.bleed * 2 > Math.min(cfg.gutterX, cfg.gutterY) && cols * rows > 1)
+      warnings.push("Bleed is wider than the gutter — adjacent pages will bleed into each other.");
+    if (cfg.bindingGutter / 2 + fitted.w > cell0.w + 0.01)
+      warnings.push("Binding gutter pushes content past the cell edge.");
+    const minMargin = Math.min(cfg.marginTop, cfg.marginBottom, cfg.marginLeft, cfg.marginRight);
+    if (cfg.cropMarks && minMargin < cfg.bleed + 12)
+      warnings.push("Margin is too tight for crop marks — allow at least bleed + 12 pt.");
+  }
+
   if (cfg.mode === "nup") {
     return buildNupPlan(totalSourcePages, pageSize, cfg, cells, cols, rows, warnings);
   }
