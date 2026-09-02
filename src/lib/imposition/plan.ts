@@ -114,7 +114,9 @@ export function buildPlan(
     for (let s = 0; s < sheetsPerSignature; s++) {
       const front: Placement[] = [];
       const back: Placement[] = [];
-      const creepShift = cfg.creep * (sheetsPerSignature - 1 - s);
+      // Sheet 0 is the outermost wrap and needs no compensation; each sheet
+      // nested inside it is pushed toward the spine by one creep step.
+      const creepShift = cfg.mode === "saddle" ? cfg.creep * s : 0;
 
       leaves.forEach((leaf, j) => {
         const globalLeaf =
