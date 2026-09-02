@@ -63,6 +63,16 @@ export interface ImpositionPlan {
   warnings: string[];
 }
 
+export type NupOrder = "sequential" | "cutstack" | "repeat";
+
+export interface MarkColors {
+  crop: string;
+  fold: string;
+  label: string;
+  slug: string;
+  registration: string;
+}
+
 export interface ImpositionConfig {
   mode: "saddle" | "perfect" | "nup";
   pagesPerSignature: number; // 4,8,...
