@@ -189,6 +189,10 @@ export function buildPlan(
   };
 }
 
+function relabel(list: Placement[], side: "front" | "back"): Placement[] {
+  return list.map((p) => ({ ...p, side }));
+}
+
 function mirrorCell(
   cell: CellRect,
   cfg: ImpositionConfig,
