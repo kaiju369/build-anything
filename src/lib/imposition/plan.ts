@@ -150,12 +150,21 @@ export function buildPlan(
         );
       });
 
+      // Press convention: the surface carrying the first page of the
+      // signature (the cover on sheet 1) runs first. Swapping the two
+      // surfaces keeps registration intact — the same physical sheet is
+      // simply fed the other way round.
+      const coverOnBack =
+        cfg.coverFirst && back.some((p) => p.logicalNumber === sigFirst);
+      const surfaceA = coverOnBack ? relabel(back, "front") : front;
+      const surfaceB = coverOnBack ? relabel(front, "back") : back;
+
       sheets.push({
         id: `S${sig + 1}-${s + 1}`,
         signatureIndex: sig,
         sheetIndexInSignature: s,
-        front,
-        back,
+        front: surfaceA,
+        back: surfaceB,
       });
     }
   }
