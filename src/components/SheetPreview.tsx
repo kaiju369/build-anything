@@ -9,6 +9,7 @@ interface Props {
   doc: LoadedDoc | null;
   showThumbs: boolean;
   zoom?: number;
+  sheetIndex?: number;
 }
 
 function css(name: string) {
@@ -16,7 +17,15 @@ function css(name: string) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || "#888";
 }
 
-export function SheetPreview({ plan, cfg, placements, doc, showThumbs, zoom = 1 }: Props) {
+export function SheetPreview({
+  plan,
+  cfg,
+  placements,
+  doc,
+  showThumbs,
+  zoom = 1,
+  sheetIndex = 0,
+}: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const ref = useRef<HTMLCanvasElement>(null);
   const [box, setBox] = useState({ w: 640, h: 480 });
@@ -151,7 +160,7 @@ export function SheetPreview({ plan, cfg, placements, doc, showThumbs, zoom = 1 
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.globalAlpha = showThumbs && doc ? 0.4 : 0.85;
-        ctx.fillStyle = ink;
+        ctx.fillStyle = cfg.pageLabels ? cfg.colors.label : ink;
         ctx.fillText(label, 0, 0);
         ctx.restore();
       }
@@ -208,7 +217,7 @@ export function SheetPreview({ plan, cfg, placements, doc, showThumbs, zoom = 1 
     return () => {
       cancelled = true;
     };
-  }, [plan, cfg, placements, doc, showThumbs, box, zoom]);
+  }, [plan, cfg, placements, doc, showThumbs, box, zoom, sheetIndex]);
 
   return (
     <div
