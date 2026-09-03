@@ -130,12 +130,11 @@ describe("every configuration", () => {
         });
 
         it(`${name}: folds into consecutive reading order`, () => {
-          const { plan, perSig } = readBooklet(
+          const { plan, orders } = readBooklet(
             cfgOf({ nupCols: cols, nupRows: rows, pagesPerSignature: P, duplex }),
             96,
           );
-          for (const [sig, { top, bottom }] of perSig) {
-            const order = [...top, ...bottom.reverse()];
+          for (const [sig, order] of orders) {
             const first = plan.signatures[sig]!.firstPage;
             expect(order).toEqual(order.map((_, i) => first + i));
           }
