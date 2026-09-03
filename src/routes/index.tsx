@@ -1,13 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SheetPreview } from "@/components/SheetPreview";
 import { buildPlan } from "@/lib/imposition/plan";
 import { exportImposedPdf } from "@/lib/imposition/export";
 import {
+  MARK_PALETTES,
   PAPER_PRESETS,
   UNIT_TO_PT,
   defaultConfig,
   type ImpositionConfig,
+  type MarkColors,
   type Unit,
 } from "@/lib/imposition/types";
 import { loadPdf, type LoadedDoc } from "@/lib/pdf/thumbs";
@@ -309,11 +311,49 @@ function Workstation() {
             </Field>
           </Group>
 
+          <Group title="Output">
+            <div className="grid grid-cols-2 gap-2">
+              <Toggle
+                label="Cover first"
+                value={cfg.coverFirst}
+                onChange={(v) => set("coverFirst", v)}
+              />
+              <Toggle
+                label="Single sided"
+                value={cfg.singleSided}
+                onChange={(v) => set("singleSided", v)}
+              />
+            </div>
+            {cfg.mode === "nup" && (
+              <Field label="Page order across the grid">
+                <select
+                  className="input"
+                  value={cfg.nupOrder}
+                  onChange={(e) => set("nupOrder", e.target.value as ImpositionConfig["nupOrder"])}
+                >
+                  <option value="sequential">Sequential — reading order</option>
+                  <option value="cutstack">Cut &amp; stack — guillotine once</option>
+                  <option value="repeat">Repeat — same page every slot</option>
+                </select>
+              </Field>
+            )}
+          </Group>
+
           <Group title="Marks">
             <div className="grid grid-cols-2 gap-2">
               <Toggle label="Crop marks" value={cfg.cropMarks} onChange={(v) => set("cropMarks", v)} />
               <Toggle label="Fold marks" value={cfg.foldMarks} onChange={(v) => set("foldMarks", v)} />
               <Toggle label="Page labels" value={cfg.pageLabels} onChange={(v) => set("pageLabels", v)} />
+              <Toggle
+                label="Registration"
+                value={cfg.registration}
+                onChange={(v) => set("registration", v)}
+              />
+              <Toggle
+                label="Collation"
+                value={cfg.collationMarks}
+                onChange={(v) => set("collationMarks", v)}
+              />
               <Toggle label="Thumbnails" value={showThumbs} onChange={setShowThumbs} />
             </div>
             <Field label="Slug line">
@@ -324,6 +364,59 @@ function Workstation() {
                 onChange={(e) => set("slug", e.target.value)}
               />
             </Field>
+          </Group>
+
+          <Group title="Mark colours">
+            <Field label="Palette">
+              <div className="flex flex-wrap gap-1.5">
+                {Object.entries(MARK_PALETTES).map(([name, palette]) => {
+                  const active = JSON.stringify(palette) === JSON.stringify(cfg.colors);
+                  return (
+                    <button
+                      key={name}
+                      onClick={() => set("colors", palette)}
+                      title={name}
+                      className={`flex items-center gap-1.5 rounded-sm border px-2 py-1 font-mono text-[10px] uppercase tracking-wider transition-colors ${
+                        active
+                          ? "border-primary text-primary"
+                          : "border-border text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      <span
+                        className="h-2.5 w-2.5 rounded-[2px] ring-1 ring-border"
+                        style={{ background: palette.crop }}
+                      />
+                      {name}
+                    </button>
+                  );
+                })}
+              </div>
+            </Field>
+            <div className="grid grid-cols-2 gap-2">
+              {(
+                [
+                  ["crop", "Crop"],
+                  ["fold", "Fold"],
+                  ["label", "Labels"],
+                  ["registration", "Register"],
+                  ["slug", "Slug"],
+                ] as [keyof MarkColors, string][]
+              ).map(([key, label]) => (
+                <label
+                  key={key}
+                  className="flex items-center justify-between gap-2 rounded-sm border border-border px-2 py-1.5"
+                >
+                  <span className="label-caps truncate">{label}</span>
+                  <input
+                    type="color"
+                    aria-label={`${label} mark colour`}
+                    value={cfg.colors[key]}
+                    onChange={(e) => set("colors", { ...cfg.colors, [key]: e.target.value })}
+                    className="h-5 w-7 cursor-pointer rounded-[2px] border border-border bg-transparent p-0"
+                  />
+                </label>
+              ))}
+            </div>
           </Group>
         </section>
 
@@ -416,6 +509,7 @@ function Workstation() {
                 doc={doc}
                 showThumbs={showThumbs}
                 zoom={zoom}
+                sheetIndex={clampedIndex}
               />
               {!doc && (
                 <p className="label-caps pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 text-center">
@@ -513,7 +607,10 @@ function Workstation() {
             <Stat k="Signatures" v={String(plan.signatures.length)} />
             <Stat k="Sheets per sig" v={String(plan.signatures[0]?.sheets ?? 0)} />
             <Stat k="Physical sheets" v={String(plan.sheets.length)} />
-            <Stat k="Printed surfaces" v={String(plan.sheets.length * 2)} />
+            <Stat
+              k="Printed surfaces"
+              v={String(plan.sheets.length * (cfg.singleSided ? 1 : 2))}
+            />
             <Stat k="Pages per surface" v={String(plan.cols * plan.rows)} />
           </Group>
           <Group title="Validation">
