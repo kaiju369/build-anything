@@ -51,9 +51,10 @@ export function SheetPreview({ plan, cfg, placements, doc, showThumbs, zoom = 1 
 
     const sheetColor = css("--sheet");
     const ink = css("--sheet-ink");
-    const mark = css("--mark");
+    // Mark colours come from the job's palette so the preview matches the export.
+    const mark = cfg.colors.crop;
     const measure = css("--measure");
-    const fold = css("--fold");
+    const fold = cfg.colors.fold;
 
     const draw = async () => {
       ctx.clearRect(0, 0, plan.sheetWidth, plan.sheetHeight);
