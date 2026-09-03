@@ -6,6 +6,7 @@ import { exportImposedPdf } from "@/lib/imposition/export";
 import {
   MARK_PALETTES,
   PAPER_PRESETS,
+  correctConfig,
   UNIT_TO_PT,
   defaultConfig,
   type ImpositionConfig,
@@ -64,8 +65,31 @@ function Workstation() {
   const inputRef = useRef<HTMLInputElement>(null);
 
 
+  const [corrections, setCorrections] = useState<string[]>([]);
+
   const set = <K extends keyof ImpositionConfig>(k: K, v: ImpositionConfig[K]) =>
     setCfg((c) => ({ ...c, [k]: v }));
+
+  // On-the-spot correction: every edit is validated and, where a setting is
+  // physically impossible, nudged back into range before the plan is built.
+  useEffect(() => {
+    const { cfg: fixed, notes } = correctConfig(cfg);
+    setCorrections(notes);
+    if (notes.length) setCfg(fixed);
+  }, [cfg]);
+
+  // Keyboard: step through sheets and flip the surface.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && /input|select|textarea/i.test(t.tagName)) return;
+      if (e.key === "ArrowLeft") setSheetIndex((i) => Math.max(0, i - 1));
+      else if (e.key === "ArrowRight") setSheetIndex((i) => i + 1);
+      else if (e.key.toLowerCase() === "f") setSide((s) => (s === "front" ? "back" : "front"));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const pageCount = doc?.pageCount ?? 32;
   const pageSize = doc?.firstPageSize ?? { width: 419.53, height: 595.28 };
@@ -434,14 +458,16 @@ function Workstation() {
             />
             {tab === "sheet" && (
               <>
-                <Segmented
-                  value={side}
-                  onChange={(v) => setSide(v as "front" | "back")}
-                  options={[
-                    { value: "front", label: "Front" },
-                    { value: "back", label: "Back" },
-                  ]}
-                />
+                {!cfg.singleSided && (
+                  <Segmented
+                    value={side}
+                    onChange={(v) => setSide(v as "front" | "back")}
+                    options={[
+                      { value: "front", label: "Front" },
+                      { value: "back", label: "Back" },
+                    ]}
+                  />
+                )}
                 <div className="ml-auto flex items-center gap-2 font-mono text-xs text-muted-foreground">
                   <button
                     aria-label="Zoom out"
@@ -629,6 +655,11 @@ function Workstation() {
                 this browser.
               </p>
             )}
+            {corrections.map((c) => (
+              <p key={c} className="font-mono text-xs text-accent">
+                ✓ auto-corrected: {c}
+              </p>
+            ))}
             {progress && <p className="font-mono text-xs text-primary">{progress}</p>}
           </Group>
         </section>
