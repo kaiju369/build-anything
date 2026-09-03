@@ -1,5 +1,13 @@
-import { PDFDocument, degrees, rgb } from "pdf-lib";
+import { PDFDocument, degrees, rgb, type RGB } from "pdf-lib";
 import type { ImpositionConfig, ImpositionPlan, Placement } from "./types";
+
+/** "#rrggbb" -> pdf-lib rgb(). Falls back to mid grey for anything unparseable. */
+export function hexToRgb(hex: string): RGB {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return rgb(0.4, 0.4, 0.4);
+  const n = parseInt(m[1]!, 16);
+  return rgb(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255);
+}
 
 export async function exportImposedPdf(
   sourceBytes: ArrayBuffer,
@@ -31,13 +39,18 @@ export async function exportImposedPdf(
     }
   }
 
+  const cCrop = hexToRgb(cfg.colors.crop);
+  const cFold = hexToRgb(cfg.colors.fold);
+  const cLabel = hexToRgb(cfg.colors.label);
+  const cSlug = hexToRgb(cfg.colors.slug);
+  const cReg = hexToRgb(cfg.colors.registration);
 
-
-  const surfaces: { placements: Placement[]; label: string }[] = [];
-  for (const sheet of plan.sheets) {
-    surfaces.push({ placements: sheet.front, label: `${sheet.id} front` });
-    surfaces.push({ placements: sheet.back, label: `${sheet.id} back` });
-  }
+  const surfaces: { placements: Placement[]; label: string; sheet: number }[] = [];
+  plan.sheets.forEach((sheet, i) => {
+    surfaces.push({ placements: sheet.front, label: `${sheet.id} front`, sheet: i });
+    if (!cfg.singleSided && sheet.back.length)
+      surfaces.push({ placements: sheet.back, label: `${sheet.id} back`, sheet: i });
+  });
 
   let done = 0;
   for (const surface of surfaces) {
@@ -62,23 +75,25 @@ export async function exportImposedPdf(
           });
         }
       }
-      if (cfg.cropMarks) drawCropMarks(page, pl);
+      if (cfg.cropMarks) drawCropMarks(page, pl, cfg.bleed, cCrop);
       if (cfg.pageLabels) {
         page.drawText(String(pl.logicalNumber), {
           x: pl.x + 4,
           y: pl.y + 4,
           size: 7,
-          color: rgb(0.6, 0.6, 0.6),
+          color: cLabel,
         });
       }
     }
-    if (cfg.foldMarks) drawFoldMarks(page, plan, cfg);
+    if (cfg.foldMarks) drawFoldMarks(page, plan, cfg, cFold);
+    if (cfg.registration) drawRegistrationTargets(page, plan, cReg);
+    if (cfg.collationMarks) drawCollationMark(page, plan, surface.sheet, cReg);
     if (cfg.slug) {
       page.drawText(`${cfg.slug} — ${surface.label}`, {
         x: 8,
         y: 6,
         size: 6,
-        color: rgb(0.45, 0.45, 0.45),
+        color: cSlug,
       });
     }
     done++;
@@ -91,10 +106,9 @@ export async function exportImposedPdf(
 
 type AnyPage = ReturnType<PDFDocument["addPage"]>;
 
-function drawCropMarks(page: AnyPage, pl: Placement) {
+function drawCropMarks(page: AnyPage, pl: Placement, bleed: number, c: RGB) {
   const len = 8;
-  const off = 3;
-  const c = rgb(0.35, 0.35, 0.35);
+  const off = 3 + bleed;
   const corners = [
     [pl.x, pl.y],
     [pl.x + pl.width, pl.y],
@@ -119,8 +133,7 @@ function drawCropMarks(page: AnyPage, pl: Placement) {
   }
 }
 
-function drawFoldMarks(page: AnyPage, plan: ImpositionPlan, cfg: ImpositionConfig) {
-  const c = rgb(0.7, 0.7, 0.7);
+function drawFoldMarks(page: AnyPage, plan: ImpositionPlan, cfg: ImpositionConfig, c: RGB) {
   const liveW = cfg.sheetWidth - cfg.marginLeft - cfg.marginRight;
   const liveH = cfg.sheetHeight - cfg.marginTop - cfg.marginBottom;
   for (let i = 1; i < plan.cols; i++) {
@@ -159,3 +172,45 @@ function drawFoldMarks(page: AnyPage, plan: ImpositionPlan, cfg: ImpositionConfi
   }
 }
 
+/** Cross-in-circle targets on all four edges, used to check press register. */
+function drawRegistrationTargets(page: AnyPage, plan: ImpositionPlan, c: RGB) {
+  const r = 4.5;
+  const spots = [
+    [plan.sheetWidth / 2, 9],
+    [plan.sheetWidth / 2, plan.sheetHeight - 9],
+    [9, plan.sheetHeight / 2],
+    [plan.sheetWidth - 9, plan.sheetHeight / 2],
+  ] as const;
+  for (const [x, y] of spots) {
+    page.drawCircle({ x, y, size: r, borderWidth: 0.35, borderColor: c });
+    page.drawLine({
+      start: { x: x - r - 2, y },
+      end: { x: x + r + 2, y },
+      thickness: 0.35,
+      color: c,
+    });
+    page.drawLine({
+      start: { x, y: y - r - 2 },
+      end: { x, y: y + r + 2 },
+      thickness: 0.35,
+      color: c,
+    });
+  }
+}
+
+/**
+ * A stepped black bar on the spine edge. Once the signatures are gathered the
+ * bars form a descending staircase, so a misgathered book is obvious.
+ */
+function drawCollationMark(page: AnyPage, plan: ImpositionPlan, sheetIndex: number, c: RGB) {
+  const total = Math.max(1, plan.sheets.length);
+  const barH = Math.min(18, (plan.sheetHeight - 24) / total);
+  const y = plan.sheetHeight - 12 - barH * (sheetIndex % total) - barH;
+  page.drawRectangle({
+    x: plan.sheetWidth / 2 - 2.5,
+    y,
+    width: 5,
+    height: barH * 0.7,
+    color: c,
+  });
+}
