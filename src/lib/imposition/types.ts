@@ -185,3 +185,92 @@ export const PAPER_PRESETS: Record<string, [number, number]> = {
   Tabloid: [792, 1224],
   SRA3: [907.09, 1275.59],
 };
+
+/**
+ * On-the-spot correction. Runs after every edit and pulls the configuration
+ * back into a physically printable state, reporting what it had to change.
+ */
+export function correctConfig(cfg: ImpositionConfig): {
+  cfg: ImpositionConfig;
+  notes: string[];
+} {
+  const notes: string[] = [];
+  const next = { ...cfg };
+  const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
+
+  for (const k of [
+    "marginTop",
+    "marginBottom",
+    "marginLeft",
+    "marginRight",
+    "gutterX",
+    "gutterY",
+    "bindingGutter",
+    "bleed",
+    "creep",
+  ] as const) {
+    if (!Number.isFinite(next[k]) || next[k] < 0) {
+      next[k] = 0;
+      notes.push(`${k} cannot be negative — reset to 0.`);
+    }
+  }
+
+  next.sheetWidth = clamp(next.sheetWidth || 842, 72, 14400);
+  next.sheetHeight = clamp(next.sheetHeight || 595, 72, 14400);
+
+  // Margins may never consume the whole sheet.
+  const hMargin = next.marginLeft + next.marginRight;
+  if (hMargin > next.sheetWidth * 0.8) {
+    const each = (next.sheetWidth * 0.8) / 2;
+    next.marginLeft = each;
+    next.marginRight = each;
+    notes.push("Side margins exceeded the sheet — trimmed to 40% each.");
+  }
+  const vMargin = next.marginTop + next.marginBottom;
+  if (vMargin > next.sheetHeight * 0.8) {
+    const each = (next.sheetHeight * 0.8) / 2;
+    next.marginTop = each;
+    next.marginBottom = each;
+    notes.push("Top/bottom margins exceeded the sheet — trimmed to 40% each.");
+  }
+
+  const cols = Math.max(1, Math.round(next.nupCols));
+  const rows = Math.max(1, Math.round(next.nupRows));
+  next.nupCols = cols;
+  next.nupRows = rows;
+
+  if (next.mode !== "nup") {
+    // Folded work needs power-of-two grids and a signature that fills whole sheets.
+    const pow2 = (n: number) => 2 ** Math.max(0, Math.round(Math.log2(n)));
+    if (!isPow2(cols) || !isPow2(rows)) {
+      next.nupCols = pow2(cols);
+      next.nupRows = pow2(rows);
+      notes.push(
+        `Folded signatures need power-of-two grids — snapped to ${next.nupCols} x ${next.nupRows}.`,
+      );
+    }
+    const perSheet = next.nupCols * next.nupRows * 2;
+    if (next.pagesPerSignature % perSheet !== 0) {
+      next.pagesPerSignature = Math.max(
+        perSheet,
+        Math.round(next.pagesPerSignature / perSheet) * perSheet,
+      );
+      notes.push(`Signature rounded to ${next.pagesPerSignature} pages to fill whole sheets.`);
+    }
+    if (next.singleSided) {
+      next.singleSided = false;
+      notes.push("Folded work is inherently double-sided — single-sided turned off.");
+    }
+  }
+
+  if (next.mode !== "saddle" && next.creep > 0) {
+    next.creep = 0;
+    notes.push("Creep only applies to saddle-stitched work — set to 0.");
+  }
+
+  return { cfg: next, notes };
+}
+
+function isPow2(n: number) {
+  return n > 0 && (n & (n - 1)) === 0;
+}

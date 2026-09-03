@@ -14,32 +14,43 @@ function cfgOf(over: Partial<ImpositionConfig>): ImpositionConfig {
  * read the resulting booklet from the top of the stack. A correct imposition
  * must read 1, 2, 3, ... with no gaps.
  */
-function readBooklet(cfg: ImpositionConfig, sourcePages: number) {
+function readBooklet(base: ImpositionConfig, sourcePages: number) {
+  // coverFirst only swaps which surface is fed first; it does not change the
+  // physical sheet, so it is verified separately.
+  const cfg = { ...base, coverFirst: false };
   const plan = buildPlan(sourcePages, A5, cfg);
   const leaves = simulate(plan.cols, plan.rows, plan.foldSequence);
-  const perSig = new Map<number, { top: number[]; bottom: number[] }>();
+  const half = leaves.length / 2;
+  const perSig = new Map<number, { top: number[][]; bottom: number[][] }>();
 
   for (const sheet of plan.sheets) {
-    const bucket =
-      perSig.get(sheet.signatureIndex) ??
-      perSig.set(sheet.signatureIndex, { top: [], bottom: [] }).get(sheet.signatureIndex)!;
+    if (!perSig.has(sheet.signatureIndex)) perSig.set(sheet.signatureIndex, { top: [], bottom: [] });
+    const bucket = perSig.get(sheet.signatureIndex)!;
     const at = (list: typeof sheet.front, row: number, col: number) =>
       list.find((p) => p.cell.row === row && p.cell.col === col)!.logicalNumber;
 
-    const half = leaves.length / 2;
+    const top: number[] = [];
+    const bottom: number[] = [];
     leaves.forEach((leaf, j) => {
       // The back surface is mirrored, so look the leaf's cell up accordingly.
       const bRow = cfg.duplex === "short" ? plan.rows - 1 - leaf.row : leaf.row;
       const bCol = cfg.duplex === "long" ? plan.cols - 1 - leaf.col : leaf.col;
-      const up = at(sheet.front, leaf.row, leaf.col);
-      const down = at(sheet.back, bRow, bCol);
-      // frontUp tells us which physical surface faces the reader.
-      const pair = leaf.frontUp ? [up, down] : [down, up];
-      (j < half ? bucket.top : bucket.bottom).push(...pair);
+      const onFront = at(sheet.front, leaf.row, leaf.col);
+      const onBack = at(sheet.back, bRow, bCol);
+      // frontUp says which physical surface of this leaf faces the reader.
+      const pair = leaf.frontUp ? [onFront, onBack] : [onBack, onFront];
+      (j < half ? top : bottom).push(...pair);
     });
+    bucket.top.push(top);
+    bucket.bottom.push(bottom);
   }
 
-  return { plan, perSig };
+  // Sheets nest: sheet 0 wraps the outside, so its bottom half is read last.
+  const orders = new Map<number, number[]>();
+  for (const [sig, { top, bottom }] of perSig)
+    orders.set(sig, [...top.flat(), ...bottom.reverse().flat()]);
+
+  return { plan, orders };
 }
 
 describe("saddle-stitch signature order", () => {
@@ -119,12 +130,11 @@ describe("every configuration", () => {
         });
 
         it(`${name}: folds into consecutive reading order`, () => {
-          const { plan, perSig } = readBooklet(
+          const { plan, orders } = readBooklet(
             cfgOf({ nupCols: cols, nupRows: rows, pagesPerSignature: P, duplex }),
             96,
           );
-          for (const [sig, { top, bottom }] of perSig) {
-            const order = [...top, ...bottom.reverse()];
+          for (const [sig, order] of orders) {
             const first = plan.signatures[sig]!.firstPage;
             expect(order).toEqual(order.map((_, i) => first + i));
           }

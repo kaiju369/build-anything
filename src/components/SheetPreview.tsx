@@ -9,6 +9,7 @@ interface Props {
   doc: LoadedDoc | null;
   showThumbs: boolean;
   zoom?: number;
+  sheetIndex?: number;
 }
 
 function css(name: string) {
@@ -16,7 +17,15 @@ function css(name: string) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || "#888";
 }
 
-export function SheetPreview({ plan, cfg, placements, doc, showThumbs, zoom = 1 }: Props) {
+export function SheetPreview({
+  plan,
+  cfg,
+  placements,
+  doc,
+  showThumbs,
+  zoom = 1,
+  sheetIndex = 0,
+}: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const ref = useRef<HTMLCanvasElement>(null);
   const [box, setBox] = useState({ w: 640, h: 480 });
@@ -51,9 +60,10 @@ export function SheetPreview({ plan, cfg, placements, doc, showThumbs, zoom = 1 
 
     const sheetColor = css("--sheet");
     const ink = css("--sheet-ink");
-    const mark = css("--mark");
+    // Mark colours come from the job's palette so the preview matches the export.
+    const mark = cfg.colors.crop;
     const measure = css("--measure");
-    const fold = css("--fold");
+    const fold = cfg.colors.fold;
 
     const draw = async () => {
       ctx.clearRect(0, 0, plan.sheetWidth, plan.sheetHeight);
@@ -150,15 +160,52 @@ export function SheetPreview({ plan, cfg, placements, doc, showThumbs, zoom = 1 
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.globalAlpha = showThumbs && doc ? 0.4 : 0.85;
-        ctx.fillStyle = ink;
+        ctx.fillStyle = cfg.pageLabels ? cfg.colors.label : ink;
         ctx.fillText(label, 0, 0);
+        ctx.restore();
+      }
+
+      if (cfg.registration) {
+        ctx.save();
+        ctx.strokeStyle = cfg.colors.registration;
+        ctx.lineWidth = 0.5;
+        const r = 4.5;
+        const spots: [number, number][] = [
+          [plan.sheetWidth / 2, 9],
+          [plan.sheetWidth / 2, plan.sheetHeight - 9],
+          [9, plan.sheetHeight / 2],
+          [plan.sheetWidth - 9, plan.sheetHeight / 2],
+        ];
+        for (const [x, y] of spots) {
+          ctx.beginPath();
+          ctx.arc(x, y, r, 0, Math.PI * 2);
+          ctx.moveTo(x - r - 2, y);
+          ctx.lineTo(x + r + 2, y);
+          ctx.moveTo(x, y - r - 2);
+          ctx.lineTo(x, y + r + 2);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      if (cfg.collationMarks && sheetIndex >= 0) {
+        const total = Math.max(1, plan.sheets.length);
+        const barH = Math.min(18, (plan.sheetHeight - 24) / total);
+        ctx.save();
+        ctx.fillStyle = cfg.colors.registration;
+        ctx.fillRect(
+          plan.sheetWidth / 2 - 2.5,
+          12 + barH * (sheetIndex % total),
+          5,
+          barH * 0.7,
+        );
         ctx.restore();
       }
 
       if (cfg.slug) {
         ctx.save();
-        ctx.fillStyle = ink;
-        ctx.globalAlpha = 0.7;
+        ctx.fillStyle = cfg.colors.slug;
+        ctx.globalAlpha = 0.85;
         ctx.font = `400 7px "IBM Plex Mono", monospace`;
         ctx.textBaseline = "bottom";
         ctx.fillText(cfg.slug, 6, plan.sheetHeight - 4);
@@ -170,7 +217,7 @@ export function SheetPreview({ plan, cfg, placements, doc, showThumbs, zoom = 1 
     return () => {
       cancelled = true;
     };
-  }, [plan, cfg, placements, doc, showThumbs, box, zoom]);
+  }, [plan, cfg, placements, doc, showThumbs, box, zoom, sheetIndex]);
 
   return (
     <div
